@@ -36,6 +36,16 @@ def get_avg_amount(ts_code, start_date, end_date):
     amounts = [float(x.amount) for x in q.all() if x.amount is not None]
     return sum(amounts) / len(amounts) if amounts else 0
 
+def get_hit_count(ts_code, strategy_id, start_date, end_date):
+    """获取指定时间段内命中策略的次数"""
+    count = StrategyStock.query.filter(
+        StrategyStock.ts_code == ts_code,
+        StrategyStock.strategy_id == strategy_id,
+        StrategyStock.date >= start_date,
+        StrategyStock.date <= end_date
+    ).count()
+    return count
+
 def get_all_ts_codes():
     """获取所有股票代码"""
     return [row.ts_code for row in db.session.query(StockDaily.ts_code).distinct()]
@@ -51,6 +61,17 @@ def process_stock_batch(ts_codes_batch, strategy_id, trade_date):
             return base - datetime.timedelta(days=days)
 
         for ts_code in ts_codes_batch:
+            # 先检查记录是否存在
+            exists = StrategyStock.query.filter_by(strategy_id=strategy_id, ts_code=ts_code, date=trade_date).first()
+            if exists:
+                # 记录已存在，只计算命中次数
+                hit_count_5d = get_hit_count(ts_code, strategy_id, get_date_delta(trade_date, 4), trade_date)
+                hit_count_15d = get_hit_count(ts_code, strategy_id, get_date_delta(trade_date, 14), trade_date)
+                hit_count_30d = get_hit_count(ts_code, strategy_id, get_date_delta(trade_date, 29), trade_date)
+                selected.append((ts_code, None, hit_count_5d, hit_count_15d, hit_count_30d, True))  # True表示已存在
+                continue
+
+            # 记录不存在，执行策略计算
             # 1. 最近1日成交量 > 前5日均值*1.3
             day1 = trade_date
             day1_vol = get_avg_vol(ts_code, day1, day1)
@@ -89,7 +110,11 @@ def process_stock_batch(ts_codes_batch, strategy_id, trade_date):
             # 1,2,3为或，4,5,6为或，最终为(1或2或3)且(4或5或6)
             if (cond1 or cond2 or cond3) and (cond4 or cond5 or cond6):
                 avg_amount_5d = get_avg_amount(ts_code, day5, day1)
-                selected.append((ts_code, avg_amount_5d))
+                # 计算命中次数
+                hit_count_5d = get_hit_count(ts_code, strategy_id, get_date_delta(trade_date, 4), trade_date)
+                hit_count_15d = get_hit_count(ts_code, strategy_id, get_date_delta(trade_date, 14), trade_date)
+                hit_count_30d = get_hit_count(ts_code, strategy_id, get_date_delta(trade_date, 29), trade_date)
+                selected.append((ts_code, avg_amount_5d, hit_count_5d, hit_count_15d, hit_count_30d, False))  # False表示新记录
         
         return selected
 
@@ -125,12 +150,31 @@ def run_strategy_parallel(strategy_id, trade_date=None, num_processes=6):
             all_selected.extend(batch_result)
         
         # 写入数据库
-        for ts_code, avg_amount_5d in all_selected:
-            exists = StrategyStock.query.filter_by(strategy_id=strategy_id, ts_code=ts_code, date=trade_date).first()
-            if not exists:
-                db.session.add(StrategyStock(strategy_id=strategy_id, ts_code=ts_code, date=trade_date, avg_amount_5d=avg_amount_5d))
+        for ts_code, avg_amount_5d, hit_count_5d, hit_count_15d, hit_count_30d, is_existing in all_selected:
+            if is_existing:
+                # 更新已存在记录的命中次数
+                exists = StrategyStock.query.filter_by(strategy_id=strategy_id, ts_code=ts_code, date=trade_date).first()
+                exists.hit_count_5d = hit_count_5d
+                exists.hit_count_15d = hit_count_15d
+                exists.hit_count_30d = hit_count_30d
             else:
-                exists.avg_amount_5d = avg_amount_5d
+                # 新增记录
+                exists = StrategyStock.query.filter_by(strategy_id=strategy_id, ts_code=ts_code, date=trade_date).first()
+                if not exists:
+                    db.session.add(StrategyStock(
+                        strategy_id=strategy_id, 
+                        ts_code=ts_code, 
+                        date=trade_date, 
+                        avg_amount_5d=avg_amount_5d,
+                        hit_count_5d=hit_count_5d,
+                        hit_count_15d=hit_count_15d,
+                        hit_count_30d=hit_count_30d
+                    ))
+                else:
+                    exists.avg_amount_5d = avg_amount_5d
+                    exists.hit_count_5d = hit_count_5d
+                    exists.hit_count_15d = hit_count_15d
+                    exists.hit_count_30d = hit_count_30d
         db.session.commit()
         
         print(f"策略选股完成，入选股票数：{len(all_selected)}")
@@ -138,7 +182,7 @@ def run_strategy_parallel(strategy_id, trade_date=None, num_processes=6):
 if __name__ == '__main__':
     # 获取最近60天的数据
     end_date = datetime.date.today()
-    start_date = end_date - datetime.timedelta(days=60)
+    start_date = end_date - datetime.timedelta(days=1)
     
     current_date = start_date
     while current_date <= end_date:

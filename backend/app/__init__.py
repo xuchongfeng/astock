@@ -46,4 +46,7 @@ def create_app():
     from app.api.user_trade_api import bp as user_trade_bp
     app.register_blueprint(user_trade_bp)
 
+    from app.api.concept_api import bp as concept_bp
+    app.register_blueprint(concept_bp)
+
     return app

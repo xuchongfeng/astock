@@ -58,8 +58,8 @@ const App = () => {
                 <RiseOutlined style={{ fontSize: 32, color: '#2a9d8f' }} />
                 {!collapsed && (
                   <div style={{ marginLeft: 8, color: '#fff' }}>
-                    <div style={{ fontWeight: 'bold', lineHeight: '1.1' }}>A股数据</div>
-                    <div style={{ fontSize: 12, opacity: 0.7 }}>分析平台</div>
+                    <div style={{ fontWeight: 'bold', lineHeight: '1.1' }}>永不言弃</div>
+                    <div style={{ fontSize: 12, opacity: 0.7 }}>投资平台</div>
                   </div>
                 )}
               </div>
@@ -143,7 +143,7 @@ const App = () => {
             textAlign: 'center',
             padding: '16px 24px',
           }}>
-            A股数据分析平台 ©{new Date().getFullYear()} 提供专业量化分析工具
+            永不言弃投资平台 ©{new Date().getFullYear()} 提供专业量化分析工具
           </Footer>
         </Layout>
       </Layout>

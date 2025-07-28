@@ -22,13 +22,15 @@ import {
   PlusOutlined, 
   EditOutlined, 
   DeleteOutlined,
-  LineChartOutlined
+  LineChartOutlined,
+  PieChartOutlined
 } from '@ant-design/icons';
 import { userPositionApi } from '../api/userPositionApi';
 import { userTradeApi } from '../api/userTradeApi';
 import { stockApi } from '../api/stockApi';
 import { formatDate, formatCurrency, formatPercent } from '../utils/formatters';
 import KLineChart from '../components/KLineChart';
+import ReactECharts from 'echarts-for-react';
 import moment from 'moment';
 
 const { Title } = Typography;
@@ -104,8 +106,9 @@ const UserPortfolioPage = () => {
       // 计算持仓统计
       const totalCost = data.reduce((sum, item) => sum + (item.quantity * item.avg_price), 0);
       const totalValue = data.reduce((sum, item) => {
-        // 这里需要根据当前股价计算，暂时用成本价代替
-        return sum + (item.quantity * item.avg_price);
+        // 使用当前股价计算市值
+        const currentPrice = item.latest_price?.close || item.avg_price;
+        return sum + (item.quantity * currentPrice);
       }, 0);
       const totalProfit = totalValue - totalCost;
       const profitRate = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;
@@ -136,6 +139,87 @@ const UserPortfolioPage = () => {
     } finally {
       setTradeLoading(false);
     }
+  };
+
+  // 生成持仓分布饼图数据
+  const getPortfolioPieData = () => {
+    if (!positions || positions.length === 0) {
+      return [];
+    }
+
+    return positions.map(position => {
+      const currentPrice = position.latest_price?.close || position.avg_price;
+      const marketValue = position.quantity * currentPrice;
+      const stockName = position.stock_info?.name || position.ts_code;
+      
+      return {
+        name: `${position.ts_code}\n${stockName}`,
+        value: marketValue,
+        itemStyle: {
+          color: `hsl(${Math.random() * 360}, 70%, 60%)`
+        }
+      };
+    }).filter(item => item.value > 0); // 只显示有市值的股票
+  };
+
+  // 持仓分布饼图配置
+  const getPortfolioPieOption = () => {
+    const pieData = getPortfolioPieData();
+    
+    return {
+      title: {
+        text: '持仓市值分布',
+        left: 'center',
+        textStyle: {
+          fontSize: 16,
+          fontWeight: 'bold'
+        }
+      },
+      tooltip: {
+        trigger: 'item',
+        formatter: function(params) {
+          const totalValue = positionStats.totalValue;
+          const percentage = totalValue > 0 ? ((params.value / totalValue) * 100).toFixed(2) : 0;
+          return `${params.name}<br/>市值: ${formatCurrency(params.value)}<br/>占比: ${percentage}%`;
+        }
+      },
+      legend: {
+        orient: 'vertical',
+        left: 'left',
+        top: 'middle',
+        formatter: function(name) {
+          const item = pieData.find(item => item.name === name);
+          if (item) {
+            const percentage = positionStats.totalValue > 0 ? 
+              ((item.value / positionStats.totalValue) * 100).toFixed(1) : 0;
+            return `${name} (${percentage}%)`;
+          }
+          return name;
+        }
+      },
+      series: [
+        {
+          name: '持仓分布',
+          type: 'pie',
+          radius: ['40%', '70%'],
+          center: ['60%', '50%'],
+          data: pieData,
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowOffsetX: 0,
+              shadowColor: 'rgba(0, 0, 0, 0.5)'
+            }
+          },
+          label: {
+            show: false
+          },
+          labelLine: {
+            show: false
+          }
+        }
+      ]
+    };
   };
 
   // 持仓相关操作
@@ -268,11 +352,48 @@ const UserPortfolioPage = () => {
       render: value => formatCurrency(value)
     },
     {
+      title: '当前价格',
+      key: 'current_price',
+      width: 120,
+      align: 'right',
+      render: (_, record) => {
+        const currentPrice = record.latest_price?.close || record.avg_price;
+        return formatCurrency(currentPrice);
+      }
+    },
+    {
       title: '持仓市值',
       key: 'market_value',
       width: 120,
       align: 'right',
-      render: (_, record) => formatCurrency(record.quantity * record.avg_price)
+      render: (_, record) => {
+        const currentPrice = record.latest_price?.close || record.avg_price;
+        return formatCurrency(record.quantity * currentPrice);
+      }
+    },
+    {
+      title: '盈亏金额',
+      key: 'profit_loss',
+      width: 120,
+      align: 'right',
+      render: (_, record) => {
+        const currentPrice = record.latest_price?.close || record.avg_price;
+        const profitLoss = (currentPrice - record.avg_price) * record.quantity;
+        const color = profitLoss >= 0 ? '#389e0d' : '#cf1322';
+        return <span style={{ color, fontWeight: 'bold' }}>{formatCurrency(profitLoss)}</span>;
+      }
+    },
+    {
+      title: '盈亏率',
+      key: 'profit_rate',
+      width: 100,
+      align: 'right',
+      render: (_, record) => {
+        const currentPrice = record.latest_price?.close || record.avg_price;
+        const profitRate = record.avg_price > 0 ? ((currentPrice - record.avg_price) / record.avg_price) * 100 : 0;
+        const color = profitRate >= 0 ? '#389e0d' : '#cf1322';
+        return <span style={{ color, fontWeight: 'bold' }}>{profitRate.toFixed(2)}%</span>;
+      }
     },
     {
       title: '创建时间',
@@ -435,6 +556,26 @@ const UserPortfolioPage = () => {
                 新增持仓
               </Button>
             </div>
+            
+            {/* 持仓分布饼图 */}
+            {positions.length > 0 && (
+              <Card 
+                title={
+                  <span>
+                    <PieChartOutlined style={{ marginRight: 8 }} />
+                    持仓分布
+                  </span>
+                }
+                style={{ marginBottom: 16 }}
+              >
+                <ReactECharts 
+                  option={getPortfolioPieOption()} 
+                  style={{ height: '400px' }}
+                  notMerge={true}
+                />
+              </Card>
+            )}
+            
             <Table
               columns={positionColumns}
               dataSource={positions}

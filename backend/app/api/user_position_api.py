@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from app.services.user_position_service import (
     get_all_positions, get_position_by_id, create_position, update_position, delete_position
 )
+from app.services.stock_daily_service import get_latest_stock_price
 from app.models.stock_company import StockCompany
 
 bp = Blueprint('user_position', __name__, url_prefix='/api/user_position')
@@ -22,8 +23,11 @@ def list_positions(user_id):
         d = i.as_dict()
         company = StockCompany.query.filter_by(ts_code=i.ts_code).first()
         d['stock_info'] = company.as_dict() if company else None
+        # 获取股票的最新价格信息
+        latest_price = get_latest_stock_price(i.ts_code)
+        d['latest_price'] = latest_price
         result.append(d)
-    return jsonify({'data': result, 'total': total})
+    return jsonify({'data': result, 'total': total}) 
 
 @bp.route('/<int:user_id>/<int:position_id>', methods=['GET'])
 def get_position(user_id, position_id):

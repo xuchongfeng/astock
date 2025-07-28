@@ -172,15 +172,24 @@ CREATE TABLE strategy_stock (
     strategy_id INT NOT NULL COMMENT '策略ID',
     ts_code VARCHAR(16) NOT NULL COMMENT '股票代码',
     date DATE NULL COMMENT '关联日期',
+    rating INT NULL COMMENT '评级',
+    avg_amount_5d DECIMAL(20,4) NULL COMMENT '最近5日平均交易额',
+    hit_count_5d INT NULL COMMENT '最近5日命中策略次数',
+    hit_count_15d INT NULL COMMENT '最近15日命中策略次数',
+    hit_count_30d INT NULL COMMENT '最近30日命中策略次数',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     FOREIGN KEY (strategy_id) REFERENCES strategy(id),
     INDEX idx_strategy_id (strategy_id),
-    INDEX idx_ts_code (ts_code)
+    INDEX idx_ts_code (ts_code),
+    INDEX idx_date (date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='策略关联股票表';
 
 ALTER TABLE strategy_stock ADD COLUMN rating INT NULL COMMENT '评级';
 ALTER TABLE strategy_stock ADD COLUMN avg_amount_5d DECIMAL(20,4) NULL COMMENT '最近5日平均交易额';
+ALTER TABLE strategy_stock ADD COLUMN hit_count_5d INT NULL COMMENT '最近5日命中策略次数';
+ALTER TABLE strategy_stock ADD COLUMN hit_count_15d INT NULL COMMENT '最近15日命中策略次数';
+ALTER TABLE strategy_stock ADD COLUMN hit_count_30d INT NULL COMMENT '最近30日命中策略次数';
 
 CREATE TABLE user_position (
     id INT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
@@ -212,3 +221,16 @@ CREATE TABLE user_trade (
     INDEX idx_ts_code (ts_code),
     INDEX idx_trade_date (trade_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='交易记录表';
+
+ALTER TABLE strategy_stock ADD INDEX idx_date (date);
+
+-- 概念股分类表
+CREATE TABLE concept (
+    id INT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    code VARCHAR(16) NOT NULL COMMENT '概念分类ID',
+    name VARCHAR(100) NOT NULL COMMENT '概念分类名称',
+    src VARCHAR(10) DEFAULT 'ts' COMMENT '来源',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    UNIQUE KEY uk_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='概念股分类表';

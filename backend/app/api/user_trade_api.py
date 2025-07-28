@@ -1,8 +1,11 @@
 from flask import Blueprint, request, jsonify
 from app.services.user_trade_service import (
-    get_all_trades, get_trade_by_id, create_trade, update_trade, delete_trade
+    get_all_trades, get_trade_by_id, create_trade, update_trade, delete_trade,
+    get_latest_buy_trade, calculate_profit_loss
 )
+from app.services.user_position_service import update_position_after_trade
 from app.models.stock_company import StockCompany
+from app.models.user_trade import UserTrade
 
 bp = Blueprint('user_trade', __name__, url_prefix='/api/user_trade')
 
@@ -16,6 +19,8 @@ def list_trades(user_id):
     page = int(request.args.get('page', 1))
     page_size = int(request.args.get('page_size', 20))
     query = get_all_trades(filters, query_only=True)
+    # 默认按照创建时间倒序排列
+    query = query.order_by(UserTrade.created_at.desc())
     total = query.count()
     items = query.offset((page - 1) * page_size).limit(page_size).all()
     result = []
@@ -37,8 +42,45 @@ def get_trade(user_id, trade_id):
 def add_trade(user_id):
     data = request.json
     data['user_id'] = user_id
-    trade = create_trade(data)
-    return jsonify(trade.as_dict()), 201
+    
+    ts_code = data.get('ts_code')
+    trade_type = data.get('trade_type')
+    quantity = int(data.get('quantity', 0))
+    price = float(data.get('price', 0))
+    
+    # 验证必要参数
+    if not ts_code or not trade_type or quantity <= 0 or price <= 0:
+        return jsonify({'error': '缺少必要参数或参数无效'}), 400
+    
+    try:
+        # 如果是卖出交易，自动计算盈利
+        if trade_type == 'sell':
+            sell_price = price
+            sell_quantity = quantity
+            
+            # 获取最近的买入记录
+            latest_buy = get_latest_buy_trade(user_id, ts_code)
+            
+            if latest_buy:
+                buy_price = float(latest_buy.price)
+                buy_quantity = int(latest_buy.quantity)
+                
+                # 计算盈利/亏损
+                profit_loss = calculate_profit_loss(sell_price, sell_quantity, buy_price, buy_quantity)
+                data['profit_loss'] = profit_loss
+        
+        # 创建交易记录
+        trade = create_trade(data)
+        
+        # 更新持仓
+        update_position_after_trade(user_id, ts_code, trade_type, quantity, price)
+        
+        return jsonify(trade.as_dict()), 201
+        
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': f'交易失败: {str(e)}'}), 500
 
 @bp.route('/<int:user_id>/<int:trade_id>', methods=['PUT'])
 def edit_trade(user_id, trade_id):
