@@ -9,7 +9,8 @@ import {
   StockOutlined,
   UserOutlined,
   StrategyStockOutlined,
-  WalletOutlined
+  WalletOutlined,
+  FolderOutlined
 } from '@ant-design/icons';
 
 // 导入页面组件
@@ -26,6 +27,7 @@ import ThsIndexPage from './pages/ThsIndexPage';
 import StrategyPage from './pages/StrategyPage';
 import StrategyStockPage from './pages/StrategyStockPage';
 import UserPortfolioPage from './pages/UserPortfolioPage';
+import SnowballPage from './pages/SnowballPage';
 
 
 const { Header, Content, Footer, Sider } = Layout;
@@ -94,6 +96,9 @@ const App = () => {
             <Menu.Item key="9" icon={<UserOutlined />}>
               <Link to="/user-portfolio">我的投资组合</Link>
             </Menu.Item>
+            <Menu.Item key="10" icon={<FolderOutlined />}>
+              <Link to="/snowball">我的雪球</Link>
+            </Menu.Item>
 
           </Menu>
         </Sider>
@@ -134,6 +139,7 @@ const App = () => {
                   <Route path="/strategy" element={<StrategyPage />} />
                   <Route path="/strategy-stock" element={<StrategyStockPage />} />
                   <Route path="/user-portfolio" element={<UserPortfolioPage />} />
+                  <Route path="/snowball" element={<SnowballPage />} />
                 </Routes>
               </Card>
             </Spin>

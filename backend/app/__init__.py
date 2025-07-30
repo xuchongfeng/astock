@@ -49,4 +49,7 @@ def create_app():
     from app.api.concept_api import bp as concept_bp
     app.register_blueprint(concept_bp)
 
+    from app.api.xueqiu_api import bp as xueqiu_bp
+    app.register_blueprint(xueqiu_bp)
+
     return app
