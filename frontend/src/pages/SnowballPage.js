@@ -29,7 +29,6 @@ import {
 import { snowballApi } from '../api/snowballApi';
 import { stockApi } from '../api/stockApi';
 import { formatDate, formatCurrency } from '../utils/formatters';
-import KLineChart from '../components/KLineChart';
 
 const { Title } = Typography;
 const { TabPane } = Tabs;
@@ -55,6 +54,8 @@ const SnowballPage = () => {
   // 股票搜索相关状态
   const [stockOptions, setStockOptions] = useState([]);
   const [stockSearchLoading, setStockSearchLoading] = useState(false);
+  
+
 
   useEffect(() => {
     fetchGroups();
@@ -112,6 +113,7 @@ const SnowballPage = () => {
     setStockLoading(true);
     try {
       const response = await snowballApi.getGroupStocks(groupId);
+      console.log(response.data.data.stocks)
       const data = response.data.data.stocks || [];
       console.log(data);
       setGroupStocks(data);
@@ -194,7 +196,7 @@ const SnowballPage = () => {
     try {
       const values = await stockForm.validateFields();
       const payload = {
-        ts_code: values.ts_code,
+        stock_code: values.ts_code,
         note: values.note || ''
       };
       
@@ -212,6 +214,8 @@ const SnowballPage = () => {
     setSelectedGroup(group);
     fetchGroupStocks(group.id);
   };
+
+
 
   // 分组表格列定义
   const groupColumns = [
@@ -273,16 +277,17 @@ const SnowballPage = () => {
   const stockColumns = [
     {
       title: '股票代码',
-      dataIndex: 'ts_code',
+      dataIndex: 'symbol',
       key: 'symbol',
       width: 120,
       render: text => <span style={{ fontWeight: 'bold' }}>{text}</span>
     },
     {
       title: '股票名称',
+      dataIndex: 'name',
       key: 'name',
       width: 140,
-      render: (_, record) => record.stock_info?.name || ''
+      render: (_, record) => record.name || ''
     },
     {
       title: '当前价格',
@@ -323,7 +328,7 @@ const SnowballPage = () => {
     {
       title: '操作',
       key: 'action',
-      width: 120,
+      width: 100,
       render: (_, record) => (
         <Space>
           <Popconfirm title="确定移除此股票？" onConfirm={() => handleStockDelete(record.id)}>
@@ -394,10 +399,6 @@ const SnowballPage = () => {
                   loading={stockLoading}
                   pagination={{ pageSize: 10 }}
                   scroll={{ x: 'max-content' }}
-                  expandable={{
-                    expandedRowRender: record => record.ts_code ? <KLineChart tsCode={record.ts_code} /> : null,
-                    rowExpandable: record => !!record.ts_code,
-                  }}
                 />
               </Card>
             ) : (

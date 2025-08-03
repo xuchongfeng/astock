@@ -2,6 +2,8 @@ import requests
 import json
 from typing import Dict, List, Optional, Any
 from app import db
+from app.utils.code import reformat_stock_code
+
 
 class XueqiuService:
     """雪球API服务类"""
@@ -94,9 +96,9 @@ class XueqiuService:
         """
         url = f"{self.api_url}/v5/stock/portfolio/stock/list.json"
         params = {
-            'category': group_id,
+            'category': 1,
             'size': 1000,
-            'pid': -1
+            'pid': group_id
         }
         return self._make_request('GET', url, params=params)
 
@@ -123,11 +125,12 @@ class XueqiuService:
         :param stock_name: 股票名称
         :return: 添加结果
         """
-        url = f"{self.api_url}/v5/stock/portfolio/stock/add.json"
+        url = f"{self.api_url}/v5/stock/portfolio/stock/modify_portfolio.json"
+        symbols = reformat_stock_code(stock_code)
         data = {
-            'portfolio_id': group_id,
-            'symbol': stock_code,
-            'name': stock_name or stock_code
+            'pid': group_id,
+            'symbols': [symbols],
+            'pname': stock_name or stock_code
         }
         return self._make_request('POST', url, data=data)
 

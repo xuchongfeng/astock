@@ -31,6 +31,7 @@ import { stockApi } from '../api/stockApi';
 import { formatDate, formatCurrency, formatPercent } from '../utils/formatters';
 import KLineChart from '../components/KLineChart';
 import ReactECharts from 'echarts-for-react';
+import StockTags from '../components/StockTags';
 import moment from 'moment';
 
 const { Title } = Typography;
@@ -287,6 +288,22 @@ const UserPortfolioPage = () => {
     setTradeModalVisible(true);
   };
 
+  // 新增：处理卖出操作
+  const handleSellTrade = (record) => {
+    setEditingTrade(null);
+    tradeForm.resetFields();
+    tradeForm.setFieldsValue({
+      ts_code: record.ts_code,
+      trade_type: 'sell',
+      quantity: record.quantity,
+      trade_date: moment(),
+      price: null,
+      profit_loss: null,
+      note: ''
+    });
+    setTradeModalVisible(true);
+  };
+
   const handleTradeDelete = async (id) => {
     try {
       await userTradeApi.deleteTrade(userId, id);
@@ -396,6 +413,18 @@ const UserPortfolioPage = () => {
       }
     },
     {
+      title: '标签',
+      key: 'tags',
+      width: 200,
+      render: (_, record) => (
+        <StockTags 
+          tsCode={record.ts_code} 
+          showManage={true}
+          maxDisplay={2}
+        />
+      )
+    },
+    {
       title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
@@ -436,6 +465,12 @@ const UserPortfolioPage = () => {
       key: 'ts_code',
       width: 120,
       render: text => <span style={{ fontWeight: 'bold' }}>{text}</span>
+    },
+    {
+      title: '股票名称',
+      key: 'stock_name',
+      width: 140,
+      render: (_, record) => record.stock_info?.name || ''
     },
     {
       title: '交易类型',
@@ -500,7 +535,7 @@ const UserPortfolioPage = () => {
     {
       title: '操作',
       key: 'action',
-      width: 120,
+      width: 150,
       render: (_, record) => (
         <div>
           <Button 
@@ -508,6 +543,15 @@ const UserPortfolioPage = () => {
             icon={<EditOutlined />} 
             onClick={() => handleTradeEdit(record)}
           />
+          {record.trade_type === 'buy' && (
+            <Button 
+              type="text" 
+              style={{ color: '#389e0d' }}
+              onClick={() => handleSellTrade(record)}
+            >
+              卖出
+            </Button>
+          )}
           <Popconfirm title="确定删除？" onConfirm={() => handleTradeDelete(record.id)}>
             <Button type="text" danger icon={<DeleteOutlined />} />
           </Popconfirm>

@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { DatePicker, Spin } from 'antd';
 import moment from 'moment';
-import { stockApi } from '../api/stockApi';
+import { stockDailyApi } from '../api/stockDailyApi';
 import { formatDate } from '../utils/formatters';
 
 const { RangePicker } = DatePicker;
 
-const KLineChart = ({ tsCode, height = 500, miniMode = false }) => {
+const KLineChart = ({ tsCode, height = 500, miniMode = false, lazyLoad = false, shouldLoad = false }) => {
   // 默认区间为3个月
   const [dateRange, setDateRange] = useState([
     moment().subtract(5, 'months'),
@@ -15,36 +15,65 @@ const KLineChart = ({ tsCode, height = 500, miniMode = false }) => {
   ]);
   const [data, setData] = useState([]);
   const [volume, setVolume] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
+  // 根据lazyLoad参数决定是否自动加载
   useEffect(() => {
-    fetchChartData();
-  }, [tsCode, dateRange]);
+    if (!lazyLoad && tsCode) {
+      fetchChartData();
+    }
+  }, [tsCode, dateRange, lazyLoad]);
+
+  // 懒加载逻辑：当组件被渲染时才开始加载
+  useEffect(() => {
+    if (lazyLoad && shouldLoad && tsCode && !hasLoaded) {
+      // 添加一个小延迟，确保组件已经稳定渲染
+      const timer = setTimeout(() => {
+        fetchChartData();
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [shouldLoad, hasLoaded, lazyLoad]); // 移除tsCode依赖，避免tsCode变化时重新触发
 
   const fetchChartData = async () => {
     if (!tsCode) return;
+    
+    // 如果是懒加载模式，只有在shouldLoad为true时才加载
+    if (lazyLoad && !shouldLoad) {
+      console.log('KLineChart: 跳过加载 for', tsCode, '因为shouldLoad为false');
+      return;
+    }
 
+    console.log('KLineChart: 开始加载数据 for', tsCode, 'lazyLoad:', lazyLoad, 'shouldLoad:', shouldLoad);
+    
     setLoading(true);
     try {
       const [start, end] = dateRange;
-      const response = await stockApi.getDailyData(
+      
+      const response = await stockDailyApi.getDailyData(
         tsCode,
+        null, // trade_date
         formatDate(start, 'YYYY-MM-DD'),
         formatDate(end, 'YYYY-MM-DD')
       );
 
       // 结构：trade_date, open, close, low, high, vol
-      const chartData = response.data.data.map(item => [
+      console.log(response.data);
+      const chartData = response.data.map(item => [
         item.trade_date,
         item.open,
         item.close,
         item.low,
         item.high
       ]);
-      const volumeData = response.data.data.map(item => item.vol || item.volume || 0);
+      const volumeData = response.data.map(item => item.vol || item.volume || 0);
 
+      console.log('KLineChart: 数据加载完成 for', tsCode, 'records:', chartData.length);
       setData(chartData);
       setVolume(volumeData);
+      setHasLoaded(true);
     } catch (error) {
       console.error('获取K线数据失败:', error);
     } finally {

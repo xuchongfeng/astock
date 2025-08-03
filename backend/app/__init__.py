@@ -52,4 +52,7 @@ def create_app():
     from app.api.xueqiu_api import bp as xueqiu_bp
     app.register_blueprint(xueqiu_bp)
 
+    from app.api.tag_api import tag_bp
+    app.register_blueprint(tag_bp)
+
     return app

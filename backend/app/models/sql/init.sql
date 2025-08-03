@@ -234,3 +234,33 @@ CREATE TABLE concept (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     UNIQUE KEY uk_code (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='概念股分类表';
+
+-- 股票标签表
+CREATE TABLE tag (
+    id INT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    name VARCHAR(64) NOT NULL UNIQUE COMMENT '标签名称',
+    description VARCHAR(255) COMMENT '标签描述',
+    color VARCHAR(16) DEFAULT '#1890ff' COMMENT '标签颜色',
+    category VARCHAR(32) DEFAULT 'trend' COMMENT '标签分类：trend-走势，status-状态，custom-自定义',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股票标签表';
+
+-- 股票标签关联表
+CREATE TABLE stock_tag (
+    id INT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    ts_code VARCHAR(16) NOT NULL COMMENT '股票代码',
+    tag_id INT NOT NULL COMMENT '标签ID',
+    user_id INT NULL COMMENT '用户ID（NULL表示系统标签）',
+    start_date DATE NULL COMMENT '标签开始日期',
+    end_date DATE NULL COMMENT '标签结束日期',
+    note TEXT COMMENT '备注',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    FOREIGN KEY (tag_id) REFERENCES tag(id),
+    FOREIGN KEY (user_id) REFERENCES user(id),
+    UNIQUE KEY uk_stock_tag_user (ts_code, tag_id, user_id),
+    INDEX idx_ts_code (ts_code),
+    INDEX idx_tag_id (tag_id),
+    INDEX idx_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股票标签关联表';
