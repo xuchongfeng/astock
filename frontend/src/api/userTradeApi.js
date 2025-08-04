@@ -17,4 +17,11 @@ export const userTradeApi = {
   updateTrade: (userId, id, data) => api.put(`/api/user_trade/${userId}/${id}`, data),
   // 删除交易记录
   deleteTrade: (userId, id) => api.delete(`/api/user_trade/${userId}/${id}`),
+  
+  // 上传图片交易记录
+  uploadImage: (userId, formData) => api.post(`/api/user_trade/${userId}/upload_image`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  }),
 }; 

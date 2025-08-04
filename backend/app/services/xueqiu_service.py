@@ -59,9 +59,9 @@ class XueqiuService:
             if method.upper() == 'GET':
                 response = self.session.get(url, params=params, headers=headers)
             elif method.upper() == 'POST':
-                response = self.session.post(url, json=data, headers=headers)
+                response = self.session.post(url, data=data, headers=headers)
             elif method.upper() == 'PUT':
-                response = self.session.put(url, json=data, headers=headers)
+                response = self.session.put(url, data=data, headers=headers)
             elif method.upper() == 'DELETE':
                 response = self.session.delete(url, headers=headers)
             else:
@@ -117,20 +117,21 @@ class XueqiuService:
         }
         return self._make_request('POST', url, data=data)
 
-    def add_stock_to_group(self, group_id: str, stock_code: str, stock_name: str = None) -> Dict:
+    def add_stock_to_group(self, group_name: str, stock_code: str, stock_name: str = None) -> Dict:
         """
         向分组添加股票
-        :param group_id: 分组ID
+        :param group_name: 分组名称
         :param stock_code: 股票代码
         :param stock_name: 股票名称
         :return: 添加结果
         """
         url = f"{self.api_url}/v5/stock/portfolio/stock/modify_portfolio.json"
         symbols = reformat_stock_code(stock_code)
+        
         data = {
-            'pid': group_id,
-            'symbols': [symbols],
-            'pname': stock_name or stock_code
+            'category': 1,
+            'symbols': symbols,
+            'pnames': group_name
         }
         return self._make_request('POST', url, data=data)
 

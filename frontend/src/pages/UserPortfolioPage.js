@@ -16,14 +16,16 @@ import {
   Typography,
   Row,
   Col,
-  Statistic
+  Statistic,
+  Upload
 } from 'antd';
 import { 
   PlusOutlined, 
   EditOutlined, 
   DeleteOutlined,
   LineChartOutlined,
-  PieChartOutlined
+  PieChartOutlined,
+  UploadOutlined
 } from '@ant-design/icons';
 import { userPositionApi } from '../api/userPositionApi';
 import { userTradeApi } from '../api/userTradeApi';
@@ -58,6 +60,11 @@ const UserPortfolioPage = () => {
   // 股票搜索相关状态
   const [stockOptions, setStockOptions] = useState([]);
   const [stockSearchLoading, setStockSearchLoading] = useState(false);
+  
+  // 图片上传相关状态
+  const [imageUploadVisible, setImageUploadVisible] = useState(false);
+  const [imageUploadLoading, setImageUploadLoading] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
   
   // 持仓统计
   const [positionStats, setPositionStats] = useState({
@@ -335,6 +342,72 @@ const UserPortfolioPage = () => {
     } catch (error) {
       message.error('操作失败');
     }
+  };
+
+  // 图片上传相关处理函数
+  const handleImageUpload = () => {
+    setImageUploadVisible(true);
+    setUploadedFiles([]);
+  };
+
+  const handleImageUploadOk = async () => {
+    if (uploadedFiles.length === 0) {
+      message.warning('请先选择图片文件');
+      return;
+    }
+
+    setImageUploadLoading(true);
+    try {
+      const formData = new FormData();
+      uploadedFiles.forEach((file, index) => {
+        formData.append(`images[${index}]`, file.originFileObj);
+      });
+
+      await userTradeApi.uploadImage(userId, formData);
+      message.success('图片上传成功，交易记录已自动解析');
+      setImageUploadVisible(false);
+      setUploadedFiles([]);
+      fetchTrades(); // 刷新交易记录
+    } catch (error) {
+      console.error('图片上传失败:', error);
+      message.error('图片上传失败，请重试');
+    } finally {
+      setImageUploadLoading(false);
+    }
+  };
+
+  const handleImageUploadCancel = () => {
+    setImageUploadVisible(false);
+    setUploadedFiles([]);
+  };
+
+  const uploadProps = {
+    name: 'file',
+    multiple: true,
+    accept: 'image/*',
+    fileList: uploadedFiles,
+    beforeUpload: (file) => {
+      const isImage = file.type.startsWith('image/');
+      if (!isImage) {
+        message.error('只能上传图片文件！');
+        return false;
+      }
+      const isLt10M = file.size / 1024 / 1024 < 10;
+      if (!isLt10M) {
+        message.error('图片大小不能超过10MB！');
+        return false;
+      }
+      return false; // 阻止自动上传
+    },
+    onChange: (info) => {
+      setUploadedFiles(info.fileList);
+    },
+    onRemove: (file) => {
+      const index = uploadedFiles.indexOf(file);
+      const newFileList = uploadedFiles.slice();
+      newFileList.splice(index, 1);
+      setUploadedFiles(newFileList);
+    },
   };
 
   // 持仓表格列定义
@@ -639,6 +712,14 @@ const UserPortfolioPage = () => {
               <Button type="primary" icon={<PlusOutlined />} onClick={handleTradeAdd}>
                 新增交易
               </Button>
+              <Button 
+                type="default" 
+                icon={<UploadOutlined />} 
+                onClick={handleImageUpload}
+                style={{ marginLeft: 8 }}
+              >
+                图片上传
+              </Button>
             </div>
             <Table
               columns={tradeColumns}
@@ -723,6 +804,45 @@ const UserPortfolioPage = () => {
             <Input.TextArea rows={3} placeholder="可选，记录交易笔记" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* 图片上传模态框 */}
+      <Modal
+        title="图片上传交易记录"
+        open={imageUploadVisible}
+        onOk={handleImageUploadOk}
+        onCancel={handleImageUploadCancel}
+        confirmLoading={imageUploadLoading}
+        destroyOnClose
+        width={600}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ color: '#666', marginBottom: 16 }}>
+            请上传交易记录的截图，系统将自动解析交易信息并添加到交易记录中。
+          </p>
+          <Upload.Dragger {...uploadProps}>
+            <p className="ant-upload-drag-icon">
+              <UploadOutlined />
+            </p>
+            <p className="ant-upload-text">点击或拖拽图片文件到此区域上传</p>
+            <p className="ant-upload-hint">
+              支持单个或批量上传，每个文件不超过10MB
+            </p>
+          </Upload.Dragger>
+        </div>
+        
+        {uploadedFiles.length > 0 && (
+          <div>
+            <h4>已选择的文件：</h4>
+            <ul style={{ paddingLeft: 20 }}>
+              {uploadedFiles.map((file, index) => (
+                <li key={index}>
+                  {file.name} ({(file.size / 1024 / 1024).toFixed(2)}MB)
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </Modal>
     </div>
   );

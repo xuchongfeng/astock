@@ -197,6 +197,7 @@ const SnowballPage = () => {
       const values = await stockForm.validateFields();
       const payload = {
         stock_code: values.ts_code,
+        group_name: selectedGroup.name,
         note: values.note || ''
       };
       

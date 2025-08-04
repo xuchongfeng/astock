@@ -3,3 +3,9 @@ flask_sqlalchemy
 flask_cors
 pymysql
 tushare
+requests
+opencv-python
+pytesseract
+Pillow
+numpy
+tesseract

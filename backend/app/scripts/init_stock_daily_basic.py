@@ -14,7 +14,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from app import create_app, db
 from app.models.stock_company import StockCompany
-from app.models.stock_daily import StockDaily
+from app.models.stock_daily_basic import StockDailyBasic
 from app.scripts.config import THREADING_CONFIG, TUSHARE_CONFIG, DB_CONFIG, LOGGING_CONFIG
 
 # 设置日志
@@ -48,26 +48,29 @@ def fetch_all_ts_codes():
     with create_app().app_context():
         return [c.ts_code for c in StockCompany.query.all()]
 
-def fetch_daily_data_with_retry(ts_code, start_date=None, end_date=None, max_retries=None):
-    """带重试机制的数据获取"""
+def fetch_daily_basic_with_retry(ts_code, trade_date=None, max_retries=None):
+    """带重试机制的每日指标数据获取"""
     if max_retries is None:
         max_retries = TUSHARE_CONFIG['retry_times']
     
     for attempt in range(max_retries + 1):
         try:
-            df = pro.daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
+            if trade_date:
+                df = pro.daily_basic(ts_code=ts_code, trade_date=trade_date)
+            else:
+                df = pro.daily_basic(ts_code=ts_code)
             return df
         except Exception as e:
             if attempt < max_retries:
-                logger.warning(f"获取 {ts_code} 失败，第 {attempt + 1} 次重试: {e}")
+                logger.warning(f"获取 {ts_code} 每日指标失败，第 {attempt + 1} 次重试: {e}")
                 time.sleep(TUSHARE_CONFIG['retry_delay'])
             else:
-                logger.error(f"获取 {ts_code} 最终失败: {e}")
+                logger.error(f"获取 {ts_code} 每日指标最终失败: {e}")
                 return None
 
-def save_daily_to_db(df):
+def save_daily_basic_to_db(df):
     from app import create_app, db
-    from app.models.stock_daily import StockDaily
+    from app.models.stock_daily_basic import StockDailyBasic
     import datetime
     import pandas as pd
 
@@ -76,49 +79,64 @@ def save_daily_to_db(df):
             objs = []
             for _, row in df.iterrows():
                 trade_date = datetime.datetime.strptime(str(row['trade_date']), '%Y%m%d').date()
-                # 只插入数据库中不存在的记录（如需upsert可先查已存在的ts_code+trade_date）
-                objs.append(StockDaily(
+                
+                # 处理数值字段，避免NaN值
+                def safe_float(value):
+                    if pd.isna(value):
+                        return None
+                    try:
+                        return float(value)
+                    except (ValueError, TypeError):
+                        return None
+                
+                objs.append(StockDailyBasic(
                     ts_code=row['ts_code'],
                     trade_date=trade_date,
-                    open=row['open'],
-                    high=row['high'],
-                    low=row['low'],
-                    close=row['close'],
-                    pre_close=row['pre_close'],
-                    change=row['change'],
-                    pct_chg=row['pct_chg'],
-                    vol=int(row['vol']) if not pd.isna(row['vol']) else None,
-                    amount=float(row['amount']) * 1000 if not pd.isna(row['amount']) else None,
-                    turnover_rate=None,
+                    close=safe_float(row.get('close')),
+                    turnover_rate=safe_float(row.get('turnover_rate')),
+                    turnover_rate_f=safe_float(row.get('turnover_rate_f')),
+                    volume_ratio=safe_float(row.get('volume_ratio')),
+                    pe=safe_float(row.get('pe')),
+                    pe_ttm=safe_float(row.get('pe_ttm')),
+                    pb=safe_float(row.get('pb')),
+                    ps=safe_float(row.get('ps')),
+                    ps_ttm=safe_float(row.get('ps_ttm')),
+                    dv_ratio=safe_float(row.get('dv_ratio')),
+                    dv_ttm=safe_float(row.get('dv_ttm')),
+                    total_share=safe_float(row.get('total_share')),
+                    float_share=safe_float(row.get('float_share')),
+                    free_share=safe_float(row.get('free_share')),
+                    total_mv=safe_float(row.get('total_mv')),
+                    circ_mv=safe_float(row.get('circ_mv')),
                 ))
             if objs:
                 db.session.bulk_save_objects(objs)
                 db.session.commit()
-                logger.info(f'批量写入 {len(objs)} 条数据')
+                logger.info(f'批量写入 {len(objs)} 条每日指标数据')
                 time.sleep(DB_CONFIG['commit_delay'])  # 提交后稍作延迟
 
-def process_single_stock(ts_code, today):
-    """处理单个股票的数据获取和保存"""
+def process_single_stock_basic(ts_code, trade_date=None):
+    """处理单个股票的每日指标数据获取和保存"""
     try:
-        logger.info(f"Fetching {ts_code} ...")
-        df = fetch_daily_data_with_retry(ts_code, start_date=today, end_date=today)
+        logger.info(f"Fetching daily basic for {ts_code} ...")
+        df = fetch_daily_basic_with_retry(ts_code, trade_date)
         if df is not None and not df.empty:
-            save_daily_to_db(df)
+            save_daily_basic_to_db(df)
             logger.info(f"  {len(df)} rows saved for {ts_code}.")
             return True
         else:
-            logger.info(f"  No data for {ts_code}.")
+            logger.info(f"  No daily basic data for {ts_code}.")
             return False
     except Exception as e:
-        logger.error(f"Error processing {ts_code}: {e}")
+        logger.error(f"Error processing daily basic for {ts_code}: {e}")
         return False
 
-def process_stocks_batch(ts_codes, today, max_workers=None):
-    """批量处理股票数据"""
+def process_stocks_basic_batch(ts_codes, trade_date=None, max_workers=None):
+    """批量处理股票每日指标数据"""
     if max_workers is None:
         max_workers = THREADING_CONFIG['max_workers']
     
-    logger.info(f"开始处理 {len(ts_codes)} 只股票，使用 {max_workers} 个线程")
+    logger.info(f"开始处理 {len(ts_codes)} 只股票的每日指标数据，使用 {max_workers} 个线程")
     
     success_count = 0
     failed_count = 0
@@ -126,7 +144,7 @@ def process_stocks_batch(ts_codes, today, max_workers=None):
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # 提交所有任务
         future_to_ts_code = {
-            executor.submit(process_single_stock, ts_code, today): ts_code 
+            executor.submit(process_single_stock_basic, ts_code, trade_date): ts_code 
             for ts_code in ts_codes
         }
         
@@ -140,14 +158,14 @@ def process_stocks_batch(ts_codes, today, max_workers=None):
                 else:
                     failed_count += 1
             except Exception as e:
-                logger.error(f"处理 {ts_code} 时发生异常: {e}")
+                logger.error(f"处理 {ts_code} 每日指标时发生异常: {e}")
                 failed_count += 1
     
     logger.info(f"处理完成: 成功 {success_count} 只，失败 {failed_count} 只")
     return success_count, failed_count
 
-def process_stocks_with_progress(ts_codes, today, max_workers=None, batch_size=None):
-    """分批处理股票数据，显示进度"""
+def process_stocks_basic_with_progress(ts_codes, trade_date=None, max_workers=None, batch_size=None):
+    """分批处理股票每日指标数据，显示进度"""
     if max_workers is None:
         max_workers = THREADING_CONFIG['max_workers']
     if batch_size is None:
@@ -158,7 +176,9 @@ def process_stocks_with_progress(ts_codes, today, max_workers=None, batch_size=N
     total_success = 0
     total_failed = 0
     
-    logger.info(f"总共需要处理 {total_stocks} 只股票")
+    logger.info(f"总共需要处理 {total_stocks} 只股票的每日指标数据")
+    if trade_date:
+        logger.info(f"目标日期: {trade_date}")
     
     # 分批处理
     for i in range(0, total_stocks, batch_size):
@@ -168,7 +188,7 @@ def process_stocks_with_progress(ts_codes, today, max_workers=None, batch_size=N
         
         logger.info(f"处理第 {batch_num}/{total_batches} 批 ({len(batch)} 只股票)")
         
-        success, failed = process_stocks_batch(batch, today, max_workers)
+        success, failed = process_stocks_basic_batch(batch, trade_date, max_workers)
         total_success += success
         total_failed += failed
         processed += len(batch)
@@ -182,6 +202,22 @@ def process_stocks_with_progress(ts_codes, today, max_workers=None, batch_size=N
     logger.info(f"全部完成: 成功 {total_success} 只，失败 {total_failed} 只")
     return total_success, total_failed
 
+def fetch_all_daily_basic_by_date(trade_date):
+    """获取指定日期的所有股票每日指标数据"""
+    try:
+        logger.info(f"获取 {trade_date} 的所有股票每日指标数据")
+        df = pro.daily_basic(trade_date=trade_date)
+        if df is not None and not df.empty:
+            save_daily_basic_to_db(df)
+            logger.info(f"成功保存 {len(df)} 条每日指标数据")
+            return len(df)
+        else:
+            logger.info(f"未找到 {trade_date} 的每日指标数据")
+            return 0
+    except Exception as e:
+        logger.error(f"获取 {trade_date} 每日指标数据失败: {e}")
+        return 0
+
 def main():
     """主函数"""
     import pandas as pd
@@ -190,7 +226,7 @@ def main():
     ts_codes = fetch_all_ts_codes()
     today = datetime.datetime.today().strftime('%Y%m%d')
     
-    logger.info(f"开始获取 {len(ts_codes)} 只股票的日线数据")
+    logger.info(f"开始获取 {len(ts_codes)} 只股票的每日指标数据")
     logger.info(f"目标日期: {today}")
     logger.info(f"配置信息: 线程数={THREADING_CONFIG['max_workers']}, "
                 f"批次大小={THREADING_CONFIG['batch_size']}, "
@@ -199,7 +235,7 @@ def main():
     start_time = time.time()
     
     # 执行多线程处理
-    success_count, failed_count = process_stocks_with_progress(
+    success_count, failed_count = process_stocks_basic_with_progress(
         ts_codes, today, 
         THREADING_CONFIG['max_workers'], 
         THREADING_CONFIG['batch_size']
@@ -214,5 +250,29 @@ def main():
     
     return success_count, failed_count, elapsed_time
 
+def fetch_by_date_main():
+    """按日期获取所有股票每日指标数据的主函数"""
+    today = datetime.datetime.today().strftime('%Y%m%d')
+    
+    logger.info(f"开始获取 {today} 的所有股票每日指标数据")
+    
+    start_time = time.time()
+    
+    # 直接获取指定日期的所有数据
+    count = fetch_all_daily_basic_by_date(today)
+    
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    
+    logger.info(f"任务完成，耗时: {elapsed_time:.2f} 秒")
+    logger.info(f"成功获取 {count} 条数据")
+    
+    return count, elapsed_time
+
 if __name__ == '__main__':
-    main()
+    # 可以选择两种模式：
+    # 1. 逐个股票获取（适合历史数据）
+    # main()
+    
+    # 2. 按日期获取所有股票（适合当日数据，推荐）
+    fetch_by_date_main() 

@@ -18,6 +18,9 @@ def create_app():
     from app.api.stock_daily_api import bp as stock_daily_bp
     app.register_blueprint(stock_daily_bp)
 
+    from app.api.stock_daily_basic_api import bp as stock_daily_basic_bp
+    app.register_blueprint(stock_daily_basic_bp)
+
     from app.api.industry_api import bp as industry_bp
     app.register_blueprint(industry_bp)
 
@@ -43,6 +46,7 @@ def create_app():
 
     from app.api.user_position_api import bp as user_position_bp
     app.register_blueprint(user_position_bp)
+
     from app.api.user_trade_api import bp as user_trade_bp
     app.register_blueprint(user_trade_bp)
 
@@ -54,5 +58,11 @@ def create_app():
 
     from app.api.tag_api import tag_bp
     app.register_blueprint(tag_bp)
+
+    from app.api.deepseek_api import bp as deepseek_bp
+    app.register_blueprint(deepseek_bp)
+
+    from app.api.trade_image_api import bp as trade_image_bp
+    app.register_blueprint(trade_image_bp)
 
     return app

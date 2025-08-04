@@ -75,7 +75,7 @@ def add_stock_to_group(group_id):
             return jsonify({'error': '缺少股票代码'}), 400
         
         result = xueqiu_service.add_stock_to_group(
-            group_id=group_id,
+            group_name=data['group_name'],
             stock_code=data['stock_code'],
             stock_name=data.get('stock_name')
         )

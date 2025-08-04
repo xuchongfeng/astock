@@ -4,10 +4,26 @@ from app.services.user_trade_service import (
     get_latest_buy_trade, calculate_profit_loss
 )
 from app.services.user_position_service import update_position_after_trade
+from app.services.trade_image_service import process_and_save_trade_image
 from app.models.stock_company import StockCompany
 from app.models.user_trade import UserTrade
+import os
+from werkzeug.utils import secure_filename
+import datetime
 
 bp = Blueprint('user_trade', __name__, url_prefix='/api/user_trade')
+
+# 配置上传文件夹
+UPLOAD_FOLDER = 'uploads/trade_images'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff'}
+
+# 确保上传文件夹存在
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def allowed_file(filename):
+    """检查文件扩展名是否允许"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @bp.route('/<int:user_id>', methods=['GET'])
 def list_trades(user_id):
@@ -81,6 +97,103 @@ def add_trade(user_id):
         return jsonify({'error': str(e)}), 400
     except Exception as e:
         return jsonify({'error': f'交易失败: {str(e)}'}), 500
+
+@bp.route('/<int:user_id>/upload_image', methods=['POST'])
+def upload_trade_image(user_id):
+    """
+    上传交易图片并解析记录
+    POST /api/user_trade/<user_id>/upload_image
+    Content-Type: multipart/form-data
+    """
+    try:
+        # 检查是否有文件
+        if 'images[0]' not in request.files:
+            return jsonify({'error': '没有上传文件'}), 400
+        
+        file = request.files['images[0]']
+        if file.filename == '':
+            return jsonify({'error': '没有选择文件'}), 400
+        
+        # 检查文件类型
+        if not allowed_file(file.filename):
+            return jsonify({'error': '不支持的文件类型'}), 400
+        
+        # 获取交易日期参数
+        trade_date = request.form.get('trade_date')
+        if not trade_date:
+            trade_date = datetime.datetime.now().strftime('%Y-%m-%d')
+        
+        # 保存文件
+        filename = secure_filename(file.filename)
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{timestamp}_{filename}"
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(file_path)
+        
+        # 处理图片并保存交易记录
+        result = process_and_save_trade_image(file_path, user_id, trade_date)
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'message': f'成功识别并保存 {result["total_saved"]} 条交易记录',
+                'total_recognized': result['total_recognized'],
+                'total_saved': result['total_saved'],
+                'saved_records': result['saved_records'],
+                'filename': filename
+            }), 201
+        else:
+            return jsonify({
+                'success': False,
+                'error': result['error']
+            }), 500
+        
+    except Exception as e:
+        return jsonify({'error': f'上传处理失败: {str(e)}'}), 500
+
+@bp.route('/<int:user_id>/parse_image', methods=['POST'])
+def parse_trade_image(user_id):
+    """
+    解析已存在的交易图片
+    POST /api/user_trade/<user_id>/parse_image
+    {
+        "image_path": "/path/to/image.jpg",
+        "trade_date": "2024-01-15"
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': '缺少请求数据'}), 400
+        
+        image_path = data.get('image_path')
+        trade_date = data.get('trade_date')
+        
+        if not image_path:
+            return jsonify({'error': '缺少image_path参数'}), 400
+        
+        if not trade_date:
+            trade_date = datetime.datetime.now().strftime('%Y-%m-%d')
+        
+        # 处理图片并保存交易记录
+        result = process_and_save_trade_image(image_path, user_id, trade_date)
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'message': f'成功识别并保存 {result["total_saved"]} 条交易记录',
+                'total_recognized': result['total_recognized'],
+                'total_saved': result['total_saved'],
+                'saved_records': result['saved_records']
+            }), 201
+        else:
+            return jsonify({
+                'success': False,
+                'error': result['error']
+            }), 500
+        
+    except Exception as e:
+        return jsonify({'error': f'解析图片失败: {str(e)}'}), 500
 
 @bp.route('/<int:user_id>/<int:trade_id>', methods=['PUT'])
 def edit_trade(user_id, trade_id):
