@@ -1,7 +1,7 @@
 // API基础配置
 const API_CONFIG = {
   baseURL: process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api',
-  timeout: 15000,
+  timeout: 60000, // 调整为1分钟
 };
 
 export const ENDPOINTS = {

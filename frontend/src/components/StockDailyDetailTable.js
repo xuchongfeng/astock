@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
-import { Table, Tag, Tooltip, Button, message, Modal, Form, Input } from 'antd';
+import { Table, Tag, Tooltip, Button, message, Modal, Form, Input, Checkbox, Space, Tabs } from 'antd';
 import { formatDate, formatCurrency, formatPercent } from '../utils/formatters';
 import KLineChart from './KLineChart';
-import { StarFilled, StarOutlined, MessageOutlined } from '@ant-design/icons';
+import { StarFilled, StarOutlined, MessageOutlined, FolderOutlined, RobotOutlined } from '@ant-design/icons';
 import { watchlistApi } from '../api/watchlistApi';
 import { stockNoteApi } from '../api/stockNoteApi';
+import { snowballApi } from '../api/snowballApi';
+import { deepseekApi } from '../api/deepseekApi';
+import MarkdownRenderer from './MarkdownRenderer';
 
 const StockDailyDetailTable = ({ data, loading, pagination, onChange, sortConfig }) => {
   const [watchlistStatus, setWatchlistStatus] = useState({}); // { ts_code: true/false }
@@ -14,6 +17,21 @@ const StockDailyDetailTable = ({ data, loading, pagination, onChange, sortConfig
   const [commentLoading, setCommentLoading] = useState(false);
   const [ratingMap, setRatingMap] = useState({}); // { ts_code: 1-5 }
   const [ratingLoading, setRatingLoading] = useState({}); // { ts_code: true/false }
+  
+  // 雪球分组相关状态
+  const [snowballModal, setSnowballModal] = useState({ visible: false, ts_code: '', stock_name: '' });
+  const [snowballGroups, setSnowballGroups] = useState([]);
+  const [selectedGroups, setSelectedGroups] = useState([]);
+  const [snowballLoading, setSnowballLoading] = useState(false);
+  
+  // DeepSeek分析相关状态
+  const [deepseekModal, setDeepseekModal] = useState({ visible: false, ts_code: '', stock_name: '' });
+  const [deepseekAnalysis, setDeepseekAnalysis] = useState('');
+  const [deepseekLoading, setDeepseekLoading] = useState(false);
+  const [deepseekDailyAnalysis, setDeepseekDailyAnalysis] = useState('');
+  const [deepseekDailyLoading, setDeepseekDailyLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('basic');
+  
   const userId = localStorage.getItem('userId');
 
   // 获取收藏状态和评级（只在首次渲染和data变化时批量检查）
@@ -104,6 +122,131 @@ const StockDailyDetailTable = ({ data, loading, pagination, onChange, sortConfig
     }
   };
 
+  // 雪球分组相关处理函数
+  const handleAddToSnowball = async (ts_code, stock_name) => {
+    if (!userId) {
+      message.warning('请先登录');
+      return;
+    }
+    
+    setSnowballModal({ visible: true, ts_code, stock_name });
+    setSelectedGroups([]);
+    
+    // 获取雪球分组列表
+    try {
+      setSnowballLoading(true);
+      const response = await snowballApi.getGroups();
+      const groups = response.data.data.stocks || [];
+      setSnowballGroups(groups);
+    } catch (error) {
+      console.error('获取雪球分组失败:', error);
+      message.error('获取分组列表失败');
+    } finally {
+      setSnowballLoading(false);
+    }
+  };
+
+  const handleSnowballOk = async () => {
+    if (selectedGroups.length === 0) {
+      message.warning('请至少选择一个分组');
+      return;
+    }
+
+    try {
+      setSnowballLoading(true);
+      
+      // 批量添加到选中的分组
+      const promises = selectedGroups.map(groupId => {
+        const group = snowballGroups.find(g => g.id === groupId);
+        return snowballApi.addStockToGroup(groupId, {
+          stock_code: snowballModal.ts_code,
+          group_name: group.name,
+          note: `从股票每日数据页面添加`
+        });
+      });
+
+      await Promise.all(promises);
+      message.success(`已成功添加到 ${selectedGroups.length} 个分组`);
+      setSnowballModal({ visible: false, ts_code: '', stock_name: '' });
+      setSelectedGroups([]);
+    } catch (error) {
+      console.error('添加到雪球分组失败:', error);
+      message.error('添加到分组失败');
+    } finally {
+      setSnowballLoading(false);
+    }
+  };
+
+  const handleSnowballCancel = () => {
+    setSnowballModal({ visible: false, ts_code: '', stock_name: '' });
+    setSelectedGroups([]);
+  };
+
+  const handleGroupSelectionChange = (checkedValues) => {
+    setSelectedGroups(checkedValues);
+  };
+
+  // DeepSeek分析相关处理函数
+  const handleDeepseekAnalysis = async (ts_code, stock_name) => {
+    setDeepseekModal({ visible: true, ts_code, stock_name });
+    setDeepseekAnalysis('');
+    setDeepseekDailyAnalysis('');
+    setActiveTab('basic');
+    setDeepseekLoading(true);
+    setDeepseekDailyLoading(true);
+    
+    // 分别获取基础分析和走势分析，任何一个完成都可以展示
+    const fetchBasicAnalysis = async () => {
+      try {
+        const response = await deepseekApi.getStockBasicAnalysis(ts_code);
+        const analysis = response.data.analysis || response.analysis || '';
+        setDeepseekAnalysis(analysis);
+        if (analysis) {
+          setActiveTab('basic');
+        }
+      } catch (error) {
+        console.error('获取基础分析失败:', error);
+        setDeepseekAnalysis('');
+      } finally {
+        setDeepseekLoading(false);
+      }
+    };
+
+    const fetchDailyAnalysis = async () => {
+      try {
+        const response = await deepseekApi.getStockDailyAnalysis(ts_code);
+        const analysis = response.data.analysis || response.analysis || '';
+        setDeepseekDailyAnalysis(analysis);
+        if (analysis && !deepseekAnalysis) {
+          setActiveTab('daily');
+        }
+      } catch (error) {
+        console.error('获取走势分析失败:', error);
+        setDeepseekDailyAnalysis('');
+      } finally {
+        setDeepseekDailyLoading(false);
+      }
+    };
+
+    // 并行执行两个请求
+    Promise.allSettled([fetchBasicAnalysis(), fetchDailyAnalysis()]).then((results) => {
+      const hasSuccess = results.some(result => result.status === 'fulfilled');
+      if (!hasSuccess) {
+        message.error('获取分析报告失败，请稍后重试');
+      }
+    });
+  };
+
+  const handleDeepseekCancel = () => {
+    setDeepseekModal({ visible: false, ts_code: '', stock_name: '' });
+    setDeepseekAnalysis('');
+    setDeepseekDailyAnalysis('');
+  };
+
+  const handleTabChange = (key) => {
+    setActiveTab(key);
+  };
+
   const renderStars = (ts_code) => {
     const rating = ratingMap[ts_code] || 0;
     const loading = !!ratingLoading[ts_code];
@@ -130,24 +273,40 @@ const StockDailyDetailTable = ({ data, loading, pagination, onChange, sortConfig
       title: '股票名称',
       dataIndex: 'stock_name',
       key: 'stock_name',
-      width: 150,
+      width: 250,
       render: (text, record) => (
-        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {text}
+        <Space>
+          <span>{text}</span>
           <Button
             type="text"
             icon={watchlistStatus[record.ts_code] ? <StarFilled style={{ color: '#faad14' }} /> : <StarOutlined />}
             loading={!!watchlistLoading[record.ts_code]}
             onClick={() => handleToggleWatchlist(record.ts_code)}
             size="small"
+            title="收藏到自选股"
+          />
+          <Button
+            type="text"
+            icon={<FolderOutlined />}
+            onClick={() => handleAddToSnowball(record.ts_code, record.stock_name)}
+            size="small"
+            title="收藏到雪球分组"
+          />
+          <Button
+            type="text"
+            icon={<RobotOutlined />}
+            onClick={() => handleDeepseekAnalysis(record.ts_code, record.stock_name)}
+            size="small"
+            title="DeepSeek分析"
           />
           <Button
             type="text"
             icon={<MessageOutlined />}
             onClick={() => handleAddComment(record.ts_code, record.stock_name)}
             size="small"
+            title="添加评论"
           />
-        </span>
+        </Space>
       )
     },
     {
@@ -310,6 +469,88 @@ const StockDailyDetailTable = ({ data, loading, pagination, onChange, sortConfig
             <Input.TextArea rows={4} placeholder="请输入评论内容" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* 雪球分组选择模态框 */}
+      <Modal
+        title={`收藏到雪球分组 - ${snowballModal.stock_name || snowballModal.ts_code}`}
+        open={snowballModal.visible}
+        onOk={handleSnowballOk}
+        onCancel={handleSnowballCancel}
+        confirmLoading={snowballLoading}
+        destroyOnClose
+        width={500}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ color: '#666', marginBottom: 16 }}>
+            请选择要添加到哪些分组（可多选）：
+          </p>
+          {snowballLoading ? (
+            <div style={{ textAlign: 'center', padding: '20px' }}>
+              正在加载分组列表...
+            </div>
+          ) : (
+            <Checkbox.Group
+              value={selectedGroups}
+              onChange={handleGroupSelectionChange}
+              style={{ width: '100%' }}
+            >
+              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                {snowballGroups.map(group => (
+                  <div key={group.id} style={{ marginBottom: 8 }}>
+                    <Checkbox value={group.id}>
+                      <Space>
+                        <FolderOutlined style={{ color: '#1890ff' }} />
+                        <span style={{ fontWeight: 'bold' }}>{group.name}</span>
+                        {group.description && (
+                          <span style={{ color: '#8c8c8c', fontSize: '12px' }}>
+                            ({group.description})
+                          </span>
+                        )}
+                      </Space>
+                    </Checkbox>
+                  </div>
+                ))}
+              </div>
+            </Checkbox.Group>
+          )}
+        </div>
+      </Modal>
+
+      {/* DeepSeek分析模态框 */}
+      <Modal
+        title={`DeepSeek分析 - ${deepseekModal.stock_name || deepseekModal.ts_code}`}
+        open={deepseekModal.visible}
+        onCancel={handleDeepseekCancel}
+        footer={null}
+        destroyOnClose
+        width={900}
+        style={{ top: 20 }}
+      >
+        <Tabs 
+          activeKey={activeTab} 
+          onChange={handleTabChange}
+          type="card"
+        >
+          <Tabs.TabPane 
+            tab="个股分析" 
+            key="basic"
+          >
+            <MarkdownRenderer 
+              content={deepseekAnalysis} 
+              loading={deepseekLoading}
+            />
+          </Tabs.TabPane>
+          <Tabs.TabPane 
+            tab="走势分析" 
+            key="daily"
+          >
+            <MarkdownRenderer 
+              content={deepseekDailyAnalysis} 
+              loading={deepseekDailyLoading}
+            />
+          </Tabs.TabPane>
+        </Tabs>
       </Modal>
     </>
   );

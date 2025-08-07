@@ -21,6 +21,9 @@ def create_app():
     from app.api.stock_daily_basic_api import bp as stock_daily_basic_bp
     app.register_blueprint(stock_daily_basic_bp)
 
+    from app.api.index_daily_basic_api import bp as index_daily_basic_bp
+    app.register_blueprint(index_daily_basic_bp)
+
     from app.api.industry_api import bp as industry_bp
     app.register_blueprint(industry_bp)
 
@@ -61,6 +64,9 @@ def create_app():
 
     from app.api.deepseek_api import bp as deepseek_bp
     app.register_blueprint(deepseek_bp)
+
+    from app.api.deepseek_analysis_api import bp as deepseek_analysis_bp
+    app.register_blueprint(deepseek_analysis_bp)
 
     from app.api.trade_image_api import bp as trade_image_bp
     app.register_blueprint(trade_image_bp)
