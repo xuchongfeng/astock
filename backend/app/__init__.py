@@ -24,6 +24,12 @@ def create_app():
     from app.api.index_daily_basic_api import bp as index_daily_basic_bp
     app.register_blueprint(index_daily_basic_bp)
 
+    from app.api.trade_calendar_api import bp as trade_calendar_bp
+    app.register_blueprint(trade_calendar_bp)
+
+    from app.api.stock_minute_api import bp as stock_minute_bp
+    app.register_blueprint(stock_minute_bp)
+
     from app.api.industry_api import bp as industry_bp
     app.register_blueprint(industry_bp)
 

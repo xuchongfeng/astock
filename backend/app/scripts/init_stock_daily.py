@@ -48,6 +48,16 @@ def fetch_all_ts_codes():
     with create_app().app_context():
         return [c.ts_code for c in StockCompany.query.all()]
 
+def get_latest_update_date():
+    """获取数据库中最新数据的更新日期"""
+    with create_app().app_context():
+        latest_record = StockDaily.query.order_by(StockDaily.trade_date.desc()).first()
+        if latest_record:
+            return latest_record.trade_date
+        else:
+            # 如果没有数据，返回30天前的日期作为默认值
+            return datetime.datetime.now().date() - datetime.timedelta(days=30)
+
 def fetch_daily_data_with_retry(ts_code, start_date=None, end_date=None, max_retries=None):
     """带重试机制的数据获取"""
     if max_retries is None:
@@ -97,23 +107,26 @@ def save_daily_to_db(df):
                 logger.info(f'批量写入 {len(objs)} 条数据')
                 time.sleep(DB_CONFIG['commit_delay'])  # 提交后稍作延迟
 
-def process_single_stock(ts_code, today):
-    """处理单个股票的数据获取和保存"""
+def process_single_stock(ts_code, start_date, end_date):
+    """处理单只股票的数据"""
     try:
-        logger.info(f"Fetching {ts_code} ...")
-        df = fetch_daily_data_with_retry(ts_code, start_date=today, end_date=today)
+        # 获取日线数据
+        df = fetch_daily_data_with_retry(ts_code, start_date=start_date, end_date=end_date)
+        
         if df is not None and not df.empty:
+            # 保存到数据库
             save_daily_to_db(df)
-            logger.info(f"  {len(df)} rows saved for {ts_code}.")
+            logger.info(f"成功处理 {ts_code}: {len(df)} 条数据")
             return True
         else:
-            logger.info(f"  No data for {ts_code}.")
+            logger.warning(f"未获取到 {ts_code} 的数据")
             return False
+            
     except Exception as e:
-        logger.error(f"Error processing {ts_code}: {e}")
+        logger.error(f"处理 {ts_code} 时发生异常: {e}")
         return False
 
-def process_stocks_batch(ts_codes, today, max_workers=None):
+def process_stocks_batch(ts_codes, start_date, end_date, max_workers=None):
     """批量处理股票数据"""
     if max_workers is None:
         max_workers = THREADING_CONFIG['max_workers']
@@ -126,7 +139,7 @@ def process_stocks_batch(ts_codes, today, max_workers=None):
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # 提交所有任务
         future_to_ts_code = {
-            executor.submit(process_single_stock, ts_code, today): ts_code 
+            executor.submit(process_single_stock, ts_code, start_date, end_date): ts_code 
             for ts_code in ts_codes
         }
         
@@ -146,7 +159,7 @@ def process_stocks_batch(ts_codes, today, max_workers=None):
     logger.info(f"处理完成: 成功 {success_count} 只，失败 {failed_count} 只")
     return success_count, failed_count
 
-def process_stocks_with_progress(ts_codes, today, max_workers=None, batch_size=None):
+def process_stocks_with_progress(ts_codes, start_date, end_date, max_workers=None, batch_size=None):
     """分批处理股票数据，显示进度"""
     if max_workers is None:
         max_workers = THREADING_CONFIG['max_workers']
@@ -168,7 +181,7 @@ def process_stocks_with_progress(ts_codes, today, max_workers=None, batch_size=N
         
         logger.info(f"处理第 {batch_num}/{total_batches} 批 ({len(batch)} 只股票)")
         
-        success, failed = process_stocks_batch(batch, today, max_workers)
+        success, failed = process_stocks_batch(batch, start_date, end_date, max_workers)
         total_success += success
         total_failed += failed
         processed += len(batch)
@@ -188,10 +201,22 @@ def main():
     
     # 获取所有股票代码
     ts_codes = fetch_all_ts_codes()
-    today = datetime.datetime.today().strftime('%Y%m%d')
+    
+    # 获取数据库中最新的更新日期
+    latest_date = get_latest_update_date()
+    today = datetime.datetime.now().date()
+    
+    # 如果最新日期是今天，则不需要更新
+    if latest_date >= today:
+        logger.info(f"数据已是最新，最新更新日期: {latest_date}")
+        return 0, 0, 0
+    
+    # 计算需要更新的日期范围
+    start_date = (latest_date + datetime.timedelta(days=1)).strftime('%Y%m%d')
+    end_date = today.strftime('%Y%m%d')
     
     logger.info(f"开始获取 {len(ts_codes)} 只股票的日线数据")
-    logger.info(f"目标日期: {today}")
+    logger.info(f"更新日期范围: {start_date} 到 {end_date}")
     logger.info(f"配置信息: 线程数={THREADING_CONFIG['max_workers']}, "
                 f"批次大小={THREADING_CONFIG['batch_size']}, "
                 f"重试次数={TUSHARE_CONFIG['retry_times']}")
@@ -200,7 +225,7 @@ def main():
     
     # 执行多线程处理
     success_count, failed_count = process_stocks_with_progress(
-        ts_codes, today, 
+        ts_codes, start_date, end_date,
         THREADING_CONFIG['max_workers'], 
         THREADING_CONFIG['batch_size']
     )
