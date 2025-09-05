@@ -1,4 +1,5 @@
 from app.models.ths_index_daily import ThsIndexDaily
+from app.models.ths_index import ThsIndex
 from app import db
 
 def get_all_ths_index_daily(filters=None, query_only=False):
@@ -6,6 +7,26 @@ def get_all_ths_index_daily(filters=None, query_only=False):
     if filters:
         for attr, value in filters.items():
             query = query.filter(getattr(ThsIndexDaily, attr) == value)
+    if query_only:
+        return query
+    return query.all()
+
+def get_all_ths_index_daily_with_name(filters=None, query_only=False):
+    """获取包含指数名称的指数日线数据"""
+    # 使用更明确的字段选择
+    query = db.session.query(
+        ThsIndexDaily,
+        ThsIndex.name
+    ).outerjoin(
+        ThsIndex, 
+        ThsIndexDaily.ts_code == ThsIndex.ts_code
+    )
+    
+    if filters:
+        for attr, value in filters.items():
+            if hasattr(ThsIndexDaily, attr):
+                query = query.filter(getattr(ThsIndexDaily, attr) == value)
+    
     if query_only:
         return query
     return query.all()

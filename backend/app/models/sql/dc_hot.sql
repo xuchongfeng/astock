@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS `dc_hot` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `trade_date` varchar(8) NOT NULL COMMENT '交易日期',
+  `data_type` varchar(50) NOT NULL COMMENT '数据类型',
+  `ts_code` varchar(20) NOT NULL COMMENT '股票代码',
+  `ts_name` varchar(100) NOT NULL COMMENT '股票名称',
+  `rank` int(11) NOT NULL COMMENT '排行或者热度',
+  `pct_change` float DEFAULT NULL COMMENT '涨跌幅%',
+  `current_price` float DEFAULT NULL COMMENT '当前价',
+  `rank_time` varchar(20) DEFAULT NULL COMMENT '排行榜获取时间',
+  `market` varchar(50) DEFAULT NULL COMMENT '类型(A股市场、ETF基金、港股市场、美股市场)',
+  `hot_type` varchar(50) DEFAULT NULL COMMENT '热点类型(人气榜、飙升榜)',
+  `is_new` varchar(1) DEFAULT 'Y' COMMENT '是否最新',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_trade_date` (`trade_date`),
+  KEY `idx_ts_code` (`ts_code`),
+  KEY `idx_market` (`market`),
+  KEY `idx_hot_type` (`hot_type`),
+  KEY `idx_rank` (`rank`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='东方财富热榜数据';

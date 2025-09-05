@@ -264,3 +264,29 @@ CREATE TABLE stock_tag (
     INDEX idx_tag_id (tag_id),
     INDEX idx_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股票标签关联表';
+
+-- 创建同花顺热榜数据表
+-- 参考文档: https://tushare.pro/document/2?doc_id=320
+
+CREATE TABLE IF NOT EXISTS `ths_hot` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `trade_date` date NOT NULL COMMENT '交易日期',
+  `data_type` varchar(50) NOT NULL COMMENT '数据类型',
+  `ts_code` varchar(20) NOT NULL COMMENT '股票代码',
+  `ts_name` varchar(100) NOT NULL COMMENT '股票名称',
+  `rank` int NOT NULL COMMENT '排行',
+  `pct_change` float DEFAULT NULL COMMENT '涨跌幅%',
+  `current_price` float DEFAULT NULL COMMENT '当前价格',
+  `concept` text COMMENT '标签',
+  `rank_reason` text COMMENT '上榜解读',
+  `hot` float DEFAULT NULL COMMENT '热度值',
+  `rank_time` varchar(20) DEFAULT NULL COMMENT '排行榜获取时间',
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_trade_date` (`trade_date`),
+  KEY `idx_ts_code` (`ts_code`),
+  KEY `idx_data_type` (`data_type`),
+  KEY `idx_rank` (`rank`),
+  KEY `idx_trade_date_data_type` (`trade_date`, `data_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='同花顺热榜数据表';

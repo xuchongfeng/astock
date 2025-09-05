@@ -24,4 +24,13 @@ export const deepseekApi = {
   
   // 获取股票投资建议
   getStockInvestmentAdvice: (tsCode) => api.get(`/api/deepseek_analysis/stock/advice/${tsCode}`),
+  
+  // 获取市场概况分析
+  getMarketOverview: (date) => api.get('/api/deepseek_analysis/market/overview', { params: { date } }),
+  
+  // 获取综合分析市场
+  getMarketComprehensive: () => api.get('/api/deepseek_analysis/market/comprehensive'),
+  
+  // 获取行业分析
+  getIndustryAnalysis: (industryName, date) => api.get(`/api/deepseek_analysis/industry/${industryName}`, { params: { date } }),
 }; 

@@ -1,4 +1,5 @@
 from app import db
+from datetime import datetime
 
 class ThsMember(db.Model):
     __tablename__ = 'ths_member'
@@ -19,4 +20,17 @@ class ThsMember(db.Model):
     )
 
     def as_dict(self):
-        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+        """返回字典格式，日期字段格式化为YYYY-MM-DD"""
+        result = {}
+        for c in self.__table__.columns:
+            value = getattr(self, c.name)
+            
+            # 格式化日期字段
+            if isinstance(value, datetime):
+                result[c.name] = value.strftime('%Y-%m-%d')
+            elif isinstance(value, db.Date):
+                result[c.name] = value.strftime('%Y-%m-%d') if value else None
+            else:
+                result[c.name] = value
+                
+        return result

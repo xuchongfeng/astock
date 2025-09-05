@@ -1,0 +1,21 @@
+CREATE TABLE index_basic (
+    id INT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    ts_code VARCHAR(16) NOT NULL UNIQUE COMMENT 'TS代码',
+    name VARCHAR(64) NOT NULL COMMENT '简称',
+    fullname VARCHAR(128) COMMENT '指数全称',
+    market VARCHAR(16) COMMENT '市场',
+    publisher VARCHAR(32) COMMENT '发布方',
+    index_type VARCHAR(32) COMMENT '指数风格',
+    category VARCHAR(32) COMMENT '指数类别',
+    base_date VARCHAR(8) COMMENT '基期',
+    base_point DECIMAL(12,2) COMMENT '基点',
+    list_date VARCHAR(8) COMMENT '发布日期',
+    weight_rule VARCHAR(32) COMMENT '加权方式',
+    `desc` TEXT COMMENT '描述',
+    exp_date VARCHAR(8) COMMENT '终止日期',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX idx_market (market),
+    INDEX idx_publisher (publisher),
+    INDEX idx_category (category)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='指数基本信息表';

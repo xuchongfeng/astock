@@ -42,11 +42,20 @@ def create_app():
     from app.api.user_stock_api import bp as user_stock_bp
     app.register_blueprint(user_stock_bp)
 
+    from app.api.ths_hot_api import bp as ths_hot_bp
+    app.register_blueprint(ths_hot_bp)
+
     from app.api.stock_note_api import bp as stock_note_bp
     app.register_blueprint(stock_note_bp)
 
     from app.api.ths_index_daily_api import bp as ths_index_daily_bp
     app.register_blueprint(ths_index_daily_bp)
+
+    from app.api.ths_index_api import bp as ths_index_bp
+    app.register_blueprint(ths_index_bp)
+
+    from app.api.ths_member_api import bp as ths_member_bp
+    app.register_blueprint(ths_member_bp)
 
     from app.api.strategy_api import bp as strategy_bp
     app.register_blueprint(strategy_bp)
@@ -76,5 +85,8 @@ def create_app():
 
     from app.api.trade_image_api import bp as trade_image_bp
     app.register_blueprint(trade_image_bp)
+
+    from app.api.dc_hot_api import dc_hot_bp
+    app.register_blueprint(dc_hot_bp)
 
     return app
