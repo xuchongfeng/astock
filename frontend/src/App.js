@@ -14,7 +14,8 @@ import {
   DownOutlined,
   FireOutlined,
   TrophyOutlined,
-  DatabaseOutlined
+  DatabaseOutlined,
+  FileTextOutlined
 } from '@ant-design/icons';
 
 // 导入页面组件
@@ -37,6 +38,7 @@ import StockTagPage from './pages/StockTagPage';
 import FeaturesPage from './pages/FeaturesPage';
 import NewsHotPage from './pages/NewsHotPage';
 import StockAnalysisPage from './pages/StockAnalysisPage';
+import ArticleManagementPage from './pages/ArticleManagementPage';
 
 const { Header, Content, Footer } = Layout;
 
@@ -116,6 +118,11 @@ const App = () => {
       key: 'stock-note',
       icon: <StockOutlined />,
       label: <Link to="/stock-note">股票笔记</Link>,
+    },
+    {
+      key: 'article-management',
+      icon: <FileTextOutlined />,
+      label: <Link to="/article-management">我的文章</Link>,
     },
     {
       key: 'user-portfolio',
@@ -378,6 +385,7 @@ const App = () => {
                   <Route path="/tag-management" element={<TagManagementPage />} />
                   <Route path="/stock-tag" element={<StockTagPage />} />
                   <Route path="/stock-analysis" element={<StockAnalysisPage />} />
+                  <Route path="/article-management" element={<ArticleManagementPage />} />
                 </Routes>
               </div>
             </Spin>

@@ -5,7 +5,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-index_daily_bp = Blueprint('index_daily', __name__)
+index_daily_bp = Blueprint('index_daily', __name__, url_prefix='/api')
 
 @index_daily_bp.route('/index_daily', methods=['GET'])
 def get_all_index_daily():

@@ -7,7 +7,7 @@
 
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from app import create_app, db
 from app.models.index_daily import IndexDaily
@@ -212,21 +212,32 @@ def get_index_daily_data(ts_code, start_date=None, end_date=None):
         return None
 
 if __name__ == '__main__':
-    # 初始化所有指数的日线行情数据（最近7天）
-    # init_all_index_daily()
+    # 初始化三个主要指数的最近2年行情数据
+    from datetime import datetime, timedelta
     
-    # 初始化指定指数的日线行情数据
-    # init_index_daily_by_ts_code('000001.SH', '20240101', '20240131')
+    # 计算2年前的日期
+    end_date = datetime.now().strftime('%Y%m%d')
+    start_date = (datetime.now() - timedelta(days=730)).strftime('%Y%m%d')  # 2年约730天
     
-    # 初始化指定市场指数的日线行情数据
-    # init_index_daily_by_market('SSE')
+    # 要初始化的指数代码
+    index_codes = [
+        '000001.SH',  # 上证指数
+        '399107.SZ',  # 深圳成指
+        '399006.SZ'   # 创业板指
+    ]
     
-    # 获取指定指数的日线行情数据
-    # daily_data = get_index_daily_data('000001.SH', '20240101', '20240131')
-    # if daily_data is not None:
-    #     print(daily_data.head())
-
-    # 000001.SH
-    # 399107.SZ
-    # 399006.SZ
-    logger.info("请根据需要调用相应的函数")
+    logger.info(f"开始初始化三个主要指数的最近2年行情数据...")
+    logger.info(f"日期范围: {start_date} 到 {end_date}")
+    
+    success_count = 0
+    for ts_code in index_codes:
+        try:
+            logger.info(f"正在初始化指数: {ts_code}")
+            init_index_daily_by_ts_code(ts_code, start_date, end_date)
+            success_count += 1
+            logger.info(f"指数 {ts_code} 初始化完成")
+        except Exception as e:
+            logger.error(f"初始化指数 {ts_code} 失败: {e}")
+            continue
+    
+    logger.info(f"指数行情初始化完成，成功处理 {success_count} 个指数")

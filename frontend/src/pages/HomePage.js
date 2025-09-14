@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Row, 
   Col, 
@@ -11,7 +11,10 @@ import {
   Space,
   Divider,
   Typography,
-  Badge
+  Badge,
+  Pagination,
+  Spin,
+  message
 } from 'antd';
 import { 
   RiseOutlined, 
@@ -27,10 +30,20 @@ import {
 } from '@ant-design/icons';
 import IndexKLineChart from '../components/IndexKLineChart';
 import DeepSeekMarketAnalysis from '../components/DeepSeekMarketAnalysis';
+import { thsIndexApi } from '../api/thsIndexApi';
 
 const { Title, Text, Paragraph } = Typography;
 
 const HomePage = () => {
+  // 状态管理
+  const [hotSectors, setHotSectors] = useState([]);
+  const [hotSectorsLoading, setHotSectorsLoading] = useState(false);
+  const [hotSectorsPagination, setHotSectorsPagination] = useState({
+    current: 1,
+    pageSize: 20,
+    total: 0
+  });
+
   // Mock数据 - 大盘基本信息
   const marketOverview = {
     shanghai: {
@@ -61,40 +74,6 @@ const HomePage = () => {
       turnover: 89.45
     }
   };
-
-  // Mock数据 - 热门板块
-  const hotSectors = [
-    {
-      name: '人工智能',
-      code: 'BK0800',
-      changePercent: 3.45,
-      volume: 156.78,
-      turnover: 89.45,
-      leadingStock: '科大讯飞',
-      leadingStockChange: 5.67,
-      hotRank: 1
-    },
-    {
-      name: '新能源车',
-      code: 'BK0493',
-      changePercent: 2.89,
-      volume: 234.56,
-      turnover: 123.45,
-      leadingStock: '比亚迪',
-      leadingStockChange: 4.23,
-      hotRank: 2
-    },
-    {
-      name: '半导体',
-      code: 'BK0447',
-      changePercent: 2.34,
-      volume: 189.67,
-      turnover: 98.76,
-      leadingStock: '中芯国际',
-      leadingStockChange: 3.89,
-      hotRank: 3
-    }
-  ];
 
   // Mock数据 - 热点新闻
   const hotNews = [
@@ -169,6 +148,60 @@ const HomePage = () => {
       reason: '零售业务强劲，资产质量优良'
     }
   ];
+
+  // 获取热门板块数据
+  const fetchHotSectors = async (page = 1, pageSize = 20) => {
+    try {
+      setHotSectorsLoading(true);
+      const today = new Date().toISOString().split('T')[0];
+      const response = await thsIndexApi.getList({
+        page,
+        page_size: pageSize,
+        trade_date: today,
+        sort_fields: '-pct_change' // 按涨跌幅降序排列
+      });
+      
+      if (response.data && response.data.data) {
+        // 转换数据格式以匹配表格结构
+        const formattedData = response.data.data.map((item, index) => ({
+          key: item.ts_code,
+          name: item.name || '未知板块',
+          code: item.ts_code,
+          changePercent: item.pct_change || 0,
+          volume: item.vol ? (item.vol / 100000000).toFixed(2) : 0, // 转换为亿
+          turnover: item.total_mv ? (item.total_mv / 100000000).toFixed(2) : 0, // 转换为亿
+          leadingStock: '领涨股', // 这里需要根据实际数据结构调整
+          leadingStockChange: 0, // 这里需要根据实际数据结构调整
+          hotRank: (page - 1) * pageSize + index + 1,
+          close: item.close,
+          change: item.change,
+          trade_date: item.trade_date
+        }));
+        
+        setHotSectors(formattedData);
+        setHotSectorsPagination(prev => ({
+          ...prev,
+          current: page,
+          total: response.data.total || 0
+        }));
+      }
+    } catch (error) {
+      console.error('获取热门板块数据失败:', error);
+      message.error('获取热门板块数据失败');
+    } finally {
+      setHotSectorsLoading(false);
+    }
+  };
+
+  // 组件挂载时获取数据
+  useEffect(() => {
+    fetchHotSectors();
+  }, []);
+
+  // 处理翻页
+  const handleHotSectorsPageChange = (page, pageSize) => {
+    fetchHotSectors(page, pageSize);
+  };
 
   // 获取涨跌颜色
   const getChangeColor = (change, percent) => {
@@ -412,20 +445,39 @@ const HomePage = () => {
               </Space>
             }
             extra={
-              <Button type="link" size="small">
+              <Button 
+                type="link" 
+                size="small"
+                onClick={() => {
+                  // 跳转到同花顺概念板块页面
+                  window.location.href = '/ths-index';
+                }}
+              >
                 查看更多 <EyeOutlined />
               </Button>
             }
             bordered={false}
           >
-            <Table
-              columns={sectorColumns}
-              dataSource={hotSectors}
-              pagination={false}
-              size="small"
-              rowKey="code"
-              scroll={{ x: 800 }}
-            />
+            <Spin spinning={hotSectorsLoading}>
+              <Table
+                columns={sectorColumns}
+                dataSource={hotSectors}
+                pagination={{
+                  current: hotSectorsPagination.current,
+                  pageSize: hotSectorsPagination.pageSize,
+                  total: hotSectorsPagination.total,
+                  showSizeChanger: true,
+                  showQuickJumper: true,
+                  showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条/共 ${total} 条`,
+                  onChange: handleHotSectorsPageChange,
+                  onShowSizeChange: handleHotSectorsPageChange,
+                  pageSizeOptions: ['10', '20', '50', '100']
+                }}
+                size="small"
+                rowKey="code"
+                scroll={{ x: 800 }}
+              />
+            </Spin>
           </Card>
         </Col>
 

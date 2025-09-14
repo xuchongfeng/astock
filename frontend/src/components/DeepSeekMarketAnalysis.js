@@ -34,29 +34,47 @@ const DeepSeekMarketAnalysis = ({ date = null, height = 400 }) => {
   const [lastUpdate, setLastUpdate] = useState(null);
 
   // 如果没有指定日期，使用今天
-  const analysisDate = date || new Date();
+  // 关键修复：避免每次渲染都创建新的 Date 导致 useEffect 重复触发
+  const [analysisDate] = useState(() => date || new Date());
 
   useEffect(() => {
-    fetchMarketAnalysis();
+    let isMounted = true;
+    const run = async () => {
+      await fetchMarketAnalysis(0);
+    };
+    run();
+    return () => { isMounted = false; };
+    // 仅在稳定的 analysisDate 变化时触发
   }, [analysisDate]);
 
-  const fetchMarketAnalysis = async () => {
+  // 带有限重试的获取函数（最多3次，指数退避）
+  const fetchMarketAnalysis = async (retryCount = 0) => {
     setLoading(true);
     setError(null);
-    
     try {
       const response = await deepseekApi.getMarketOverview(formatDate(analysisDate, 'YYYY-MM-DD'));
-      
-      if (response.data.success) {
+      if (response.data && response.data.success) {
         setAnalysisData(response.data);
         setLastUpdate(new Date());
-        message.success('市场分析获取成功');
-      } else {
-        setError(response.data.error || '获取市场分析失败');
-        message.error('获取市场分析失败');
+        // 成功不提示，避免打扰
+        return;
       }
-    } catch (error) {
-      console.error('获取市场分析失败:', error);
+      // 接口返回失败时，按失败处理并考虑重试
+      const msg = (response.data && response.data.error) || '获取市场分析失败';
+      if (retryCount < 2) {
+        const delay = (2 ** retryCount) * 1000;
+        await new Promise(res => setTimeout(res, delay));
+        return fetchMarketAnalysis(retryCount + 1);
+      }
+      setError(msg);
+      message.error(msg);
+    } catch (err) {
+      console.error('获取市场分析失败:', err);
+      if (retryCount < 2) {
+        const delay = (2 ** retryCount) * 1000;
+        await new Promise(res => setTimeout(res, delay));
+        return fetchMarketAnalysis(retryCount + 1);
+      }
       setError('网络请求失败，请稍后重试');
       message.error('网络请求失败');
     } finally {
@@ -65,7 +83,7 @@ const DeepSeekMarketAnalysis = ({ date = null, height = 400 }) => {
   };
 
   const handleRefresh = () => {
-    fetchMarketAnalysis();
+    fetchMarketAnalysis(0);
   };
 
   // 解析分析内容，提取关键信息

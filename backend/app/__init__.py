@@ -54,6 +54,9 @@ def create_app():
     from app.api.ths_index_api import bp as ths_index_bp
     app.register_blueprint(ths_index_bp)
 
+    from app.api.index_daily_api import index_daily_bp
+    app.register_blueprint(index_daily_bp)
+
     from app.api.ths_member_api import bp as ths_member_bp
     app.register_blueprint(ths_member_bp)
 
@@ -88,5 +91,11 @@ def create_app():
 
     from app.api.dc_hot_api import dc_hot_bp
     app.register_blueprint(dc_hot_bp)
+
+    from app.api.market_overview_api import market_overview_bp
+    app.register_blueprint(market_overview_bp)
+
+    from app.api.article_api import bp as article_bp
+    app.register_blueprint(article_bp)
 
     return app

@@ -1,43 +1,85 @@
 import React, { useState, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { Spin, Card, Row, Col, Statistic } from 'antd';
+import { Spin, Card, Row, Col, Statistic, message } from 'antd';
 import { RiseOutlined, FallOutlined } from '@ant-design/icons';
+import { indexApi } from '../api/indexApi';
+import moment from 'moment';
 
 const IndexKLineChart = ({ indexData, height = 300 }) => {
   const [loading, setLoading] = useState(false);
+  const [chartData, setChartData] = useState({ data: [], volume: [] });
+  const [realTimeData, setRealTimeData] = useState(indexData);
 
-  // 生成模拟的K线数据（实际项目中应该从API获取）
-  const generateMockData = (basePrice, days = 30) => {
-    const data = [];
-    const volume = [];
-    let currentPrice = basePrice;
-    
-    for (let i = 0; i < days; i++) {
-      const date = new Date();
-      date.setDate(date.getDate() - (days - i - 1));
-      const dateStr = date.toISOString().slice(0, 10);
-      
-      // 模拟价格波动
-      const change = (Math.random() - 0.5) * 0.02; // ±1%的波动
-      const open = currentPrice;
-      const close = currentPrice * (1 + change);
-      const high = Math.max(open, close) * (1 + Math.random() * 0.01);
-      const low = Math.min(open, close) * (1 - Math.random() * 0.01);
-      
-      data.push([dateStr, open, close, low, high]);
-      volume.push(Math.floor(Math.random() * 1000 + 500)); // 模拟成交量
-      
-      currentPrice = close;
-    }
-    
-    return { data, volume };
+  // 获取指数代码映射
+  const getIndexCode = (name) => {
+    const codeMap = {
+      '上证指数': '000001.SH',
+      '深证成指': '399107.SZ', 
+      '创业板指': '399006.SZ'
+    };
+    return codeMap[name] || '000001.SH';
   };
 
-  const { data, volume } = generateMockData(indexData.current, 30);
+  // 从API获取K线数据
+  const fetchKlineData = async () => {
+    if (!indexData || !indexData.name) return;
+    
+    setLoading(true);
+    try {
+      const tsCode = getIndexCode(indexData.name);
+      const endDate = moment().format('YYYY-MM-DD');
+      const startDate = moment().subtract(30, 'days').format('YYYY-MM-DD');
+      
+      const response = await indexApi.getIndexDaily(tsCode, startDate, endDate);
+      
+      if (response.code === 200 && response.data) {
+        const klineData = response.data.map(item => [
+          item.trade_date,
+          parseFloat(item.open || 0),
+          parseFloat(item.close || 0),
+          parseFloat(item.low || 0),
+          parseFloat(item.high || 0)
+        ]);
+        
+        const volumeData = response.data.map(item => parseFloat(item.vol || 0));
+        
+        setChartData({
+          data: klineData,
+          volume: volumeData
+        });
+        
+        // 更新实时数据
+        if (response.data.length > 0) {
+          const latest = response.data[0];
+          setRealTimeData({
+            ...indexData,
+            current: parseFloat(latest.close || 0),
+            change: parseFloat(latest.change || 0),
+            changePercent: parseFloat(latest.pct_chg || 0),
+            volume: parseFloat(latest.vol || 0) / 10000, // 转换为亿
+            turnover: parseFloat(latest.amount || 0) / 100000 // 转换为亿
+          });
+        }
+      } else {
+        message.error('获取K线数据失败');
+      }
+    } catch (error) {
+      console.error('获取K线数据失败:', error);
+      message.error('获取K线数据失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchKlineData();
+  }, [indexData.name]);
+
+  const { data, volume } = chartData;
 
   const option = {
     title: {
-      text: `${indexData.name} K线图`,
+      text: `${realTimeData.name} K线图`,
       left: 'center',
       textStyle: {
         fontSize: 14,
@@ -173,49 +215,66 @@ const IndexKLineChart = ({ indexData, height = 300 }) => {
       style={{ height: '100%' }}
       bodyStyle={{ padding: '12px' }}
     >
-      <div style={{ textAlign: 'center', marginBottom: '12px' }}>
-        <Row gutter={16}>
-          <Col span={8}>
-            <Statistic
-              title="最新点位"
-              value={indexData.current}
-              valueStyle={{ 
-                color: indexData.changePercent > 0 ? '#f5222d' : '#52c41a',
-                fontSize: '16px',
-                fontWeight: 'bold'
-              }}
-              suffix={
-                <span style={{ fontSize: '12px' }}>
-                  {indexData.change > 0 ? '+' : ''}{indexData.change}
-                  ({indexData.changePercent > 0 ? '+' : ''}{indexData.changePercent}%)
-                </span>
-              }
-            />
-          </Col>
-          <Col span={8}>
-            <Statistic
-              title="成交量"
-              value={indexData.volume}
-              suffix="亿"
-              valueStyle={{ fontSize: '16px' }}
-            />
-          </Col>
-          <Col span={8}>
-            <Statistic
-              title="成交额"
-              value={indexData.turnover}
-              suffix="亿"
-              valueStyle={{ fontSize: '16px' }}
-            />
-          </Col>
-        </Row>
-      </div>
-      
-      <ReactECharts
-        option={option}
-        style={{ height: height - 80 }}
-        notMerge={true}
-      />
+      <Spin spinning={loading}>
+        <div style={{ textAlign: 'center', marginBottom: '12px' }}>
+          <Row gutter={16}>
+            <Col span={8}>
+              <Statistic
+                title="最新点位"
+                value={realTimeData.current}
+                precision={2}
+                valueStyle={{ 
+                  color: realTimeData.changePercent > 0 ? '#f5222d' : '#52c41a',
+                  fontSize: '16px',
+                  fontWeight: 'bold'
+                }}
+                suffix={
+                  <span style={{ fontSize: '12px' }}>
+                    {realTimeData.change > 0 ? '+' : ''}{realTimeData.change.toFixed(2)}
+                    ({realTimeData.changePercent > 0 ? '+' : ''}{realTimeData.changePercent.toFixed(2)}%)
+                  </span>
+                }
+              />
+            </Col>
+            <Col span={8}>
+              <Statistic
+                title="成交量"
+                value={realTimeData.volume}
+                precision={2}
+                suffix="亿"
+                valueStyle={{ fontSize: '16px' }}
+              />
+            </Col>
+            <Col span={8}>
+              <Statistic
+                title="成交额"
+                value={realTimeData.turnover}
+                precision={2}
+                suffix="亿"
+                valueStyle={{ fontSize: '16px' }}
+              />
+            </Col>
+          </Row>
+        </div>
+        
+        {data.length > 0 ? (
+          <ReactECharts
+            option={option}
+            style={{ height: height - 80 }}
+            notMerge={true}
+          />
+        ) : (
+          <div style={{ 
+            height: height - 80, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            color: '#999'
+          }}>
+            暂无数据
+          </div>
+        )}
+      </Spin>
     </Card>
   );
 };
